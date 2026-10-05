@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+matplotlib
+openpyxl
+groq
+python-dotenvstreamlit
+pandas
+numpy
+matplotlib
+openpyxl
+plotly
+groq
+python-dotenv
