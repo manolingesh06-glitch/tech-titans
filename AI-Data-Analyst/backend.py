@@ -3,19 +3,38 @@ import re
 import tempfile
 
 import pandas as pd
+import streamlit as st
 
 from dotenv import load_dotenv
 from groq import Groq
 
 
 # ============================================================
-# GROQ SETUP
+# GROQ API CONFIGURATION
 # ============================================================
 
 load_dotenv()
 
+GROQ_API_KEY = None
+
+# Streamlit Cloud
+try:
+    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+except Exception:
+    GROQ_API_KEY = None
+
+# Local development fallback
+if not GROQ_API_KEY:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise ValueError(
+        "GROQ_API_KEY is not configured. "
+        "Add GROQ_API_KEY to Streamlit Secrets."
+    )
+
 client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
+    api_key=GROQ_API_KEY
 )
 
 MODEL = "openai/gpt-oss-120b"
@@ -26,48 +45,58 @@ MODEL = "openai/gpt-oss-120b"
 # ============================================================
 
 def describe_dataframe(df):
-    """Create a useful description of the uploaded dataset."""
 
     lines = [
         "Dataset information:",
         f"Rows: {len(df):,}",
         f"Columns: {len(df.columns)}",
         "",
-        "Columns and data types:"
+        "Columns and data types:",
     ]
 
     for col, dtype in df.dtypes.items():
-        lines.append(f"- {col} ({dtype})")
+
+        lines.append(
+            f"- {col} ({dtype})"
+        )
 
     numeric_columns = (
-        df.select_dtypes(include="number")
+        df
+        .select_dtypes(include="number")
         .columns
         .tolist()
     )
 
     text_columns = (
-        df.select_dtypes(exclude="number")
+        df
+        .select_dtypes(exclude="number")
         .columns
         .tolist()
     )
 
-    lines.extend([
-        "",
-        f"Numeric columns: {numeric_columns}",
-        f"Text/category columns: {text_columns}",
-        "",
-        "First 5 rows:",
-        df.head(5).to_string()
-    ])
+    lines.extend(
+        [
+            "",
+            f"Numeric columns: {numeric_columns}",
+            f"Text/category columns: {text_columns}",
+            "",
+            "First 5 rows:",
+            df.head(5).to_string(),
+        ]
+    )
 
     return "\n".join(lines)
 
 
 # ============================================================
-# AI CODE GENERATION
+# GENERATE PYTHON CODE
 # ============================================================
 
-def get_code_from_ai(question, df, previous_error=None):
+def get_code_from_ai(
+    question,
+    df,
+    previous_error=None,
+):
 
     system_prompt = """
 You are an expert Python data analyst.
@@ -111,18 +140,21 @@ STRICT RULES:
         )
 
     response = client.chat.completions.create(
+
         model=MODEL,
+
         messages=[
             {
                 "role": "system",
-                "content": system_prompt
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": user_prompt
-            }
+                "content": user_prompt,
+            },
         ],
-        temperature=0
+
+        temperature=0,
     )
 
     code = response.choices[0].message.content
@@ -130,19 +162,19 @@ STRICT RULES:
     code = re.sub(
         r"```(?:python)?",
         "",
-        code
+        code,
     )
 
     code = code.replace(
         "```",
-        ""
+        "",
     )
 
     return code.strip()
 
 
 # ============================================================
-# SAFE CODE EXECUTION
+# RUN AI GENERATED CODE
 # ============================================================
 
 def run_code(code, df):
@@ -158,7 +190,7 @@ def run_code(code, df):
         "subprocess",
         "socket",
         "requests",
-        "urllib"
+        "urllib",
     ]
 
     for word in banned:
@@ -170,6 +202,7 @@ def run_code(code, df):
             )
 
     safe_builtins = {
+
         "len": len,
         "sum": sum,
         "min": min,
@@ -187,18 +220,18 @@ def run_code(code, df):
         "dict": dict,
         "set": set,
         "tuple": tuple,
-        "bool": bool
+        "bool": bool,
     }
 
     env = {
         "__builtins__": safe_builtins,
         "df": df.copy(),
-        "pd": pd
+        "pd": pd,
     }
 
     exec(
         code,
-        env
+        env,
     )
 
     if "result" not in env:
@@ -211,7 +244,7 @@ def run_code(code, df):
 
 
 # ============================================================
-# MAIN AI ANALYSIS
+# ASK AI
 # ============================================================
 
 def ask_ai(question, df):
@@ -225,12 +258,12 @@ def ask_ai(question, df):
             code = get_code_from_ai(
                 question,
                 df,
-                previous_error
+                previous_error,
             )
 
             result = run_code(
                 code,
-                df
+                df,
             )
 
             return code, result
@@ -240,6 +273,7 @@ def ask_ai(question, df):
             previous_error = str(e)
 
             if attempt == 2:
+
                 raise
 
     raise ValueError(
@@ -248,18 +282,27 @@ def ask_ai(question, df):
 
 
 # ============================================================
-# NATURAL LANGUAGE EXPLANATION
+# EXPLAIN RESULT
 # ============================================================
 
-def explain_result(question, result):
+def explain_result(
+    question,
+    result,
+):
 
-    if isinstance(result, pd.DataFrame):
+    if isinstance(
+        result,
+        pd.DataFrame,
+    ):
 
         result_text = result.to_string(
             index=False
         )
 
-    elif isinstance(result, pd.Series):
+    elif isinstance(
+        result,
+        pd.Series,
+    ):
 
         result_text = result.to_string()
 
@@ -293,28 +336,31 @@ Rules:
 """
 
     response = client.chat.completions.create(
+
         model=MODEL,
+
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are a clear and accurate "
                     "data analyst."
-                )
+                ),
             },
             {
                 "role": "user",
-                "content": prompt
-            }
+                "content": prompt,
+            },
         ],
-        temperature=0.2
+
+        temperature=0.2,
     )
 
     return response.choices[0].message.content.strip()
 
 
 # ============================================================
-# ADVANCED AI INSIGHTS
+# GENERATE ADVANCED INSIGHTS
 # ============================================================
 
 def generate_insights(df):
@@ -352,76 +398,93 @@ Rules:
 """
 
     response = client.chat.completions.create(
+
         model=MODEL,
+
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an expert data analyst "
-                    "who finds useful patterns in datasets."
-                )
+                    "who finds useful patterns "
+                    "in datasets."
+                ),
             },
             {
                 "role": "user",
-                "content": prompt
-            }
+                "content": prompt,
+            },
         ],
-        temperature=0.2
+
+        temperature=0.2,
     )
 
     return response.choices[0].message.content.strip()
 
 
 # ============================================================
-# SPEECH TO TEXT
+# VOICE TRANSCRIPTION
 # ============================================================
 
 def transcribe_audio(audio_file):
 
-    transcription = client.audio.transcriptions.create(
-        file=(
-            "voice.wav",
-            audio_file.getvalue()
-        ),
-        model="whisper-large-v3",
-        language="en",
-        prompt=(
-            "This is a question about data analysis, "
-            "datasets, CSV files, Excel files, numbers, "
-            "statistics, averages, percentages, trends, "
-            "cutoffs, charts, and comparisons."
-        ),
-        response_format="json",
-        temperature=0
+    transcription = (
+        client.audio.transcriptions.create(
+
+            file=(
+                "voice.wav",
+                audio_file.getvalue(),
+            ),
+
+            model="whisper-large-v3",
+
+            language="en",
+
+            prompt=(
+                "This is a question about data analysis, "
+                "datasets, CSV files, Excel files, numbers, "
+                "statistics, averages, percentages, trends, "
+                "cutoffs, charts, and comparisons."
+            ),
+
+            response_format="json",
+
+            temperature=0,
+        )
     )
 
     return transcription.text.strip()
 
 
 # ============================================================
-# TEXT TO SPEECH
+# VOICE GENERATION
 # ============================================================
 
 def generate_voice(text):
 
-    summary_response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Summarize this answer naturally for speech. "
-                    "Keep it under 180 characters. "
-                    "Use simple spoken English. "
-                    "No Markdown or emojis."
-                )
-            },
-            {
-                "role": "user",
-                "content": text
-            }
-        ],
-        temperature=0.2
+    summary_response = (
+        client.chat.completions.create(
+
+            model=MODEL,
+
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarize this answer naturally "
+                        "for speech. Keep it under 180 "
+                        "characters. Use simple spoken "
+                        "English. No Markdown or emojis."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": text,
+                },
+            ],
+
+            temperature=0.2,
+        )
     )
 
     spoken_text = (
@@ -433,15 +496,19 @@ def generate_voice(text):
     )
 
     response = client.audio.speech.create(
+
         model="canopylabs/orpheus-v1-english",
+
         voice="troy",
+
         input=spoken_text,
-        response_format="wav"
+
+        response_format="wav",
     )
 
     with tempfile.NamedTemporaryFile(
         delete=False,
-        suffix=".wav"
+        suffix=".wav",
     ) as audio_file:
 
         response.write_to_file(
@@ -450,17 +517,20 @@ def generate_voice(text):
 
         with open(
             audio_file.name,
-            "rb"
+            "rb",
         ) as f:
 
             return f.read()
 
 
 # ============================================================
-# AI CHART SELECTION
+# CHOOSE CHART TYPE
 # ============================================================
 
-def choose_chart_type(question, df):
+def choose_chart_type(
+    question,
+    df,
+):
 
     prompt = f"""
 You are a data visualization expert.
@@ -491,21 +561,24 @@ Reply with ONLY one word.
 """
 
     response = client.chat.completions.create(
+
         model=MODEL,
+
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You choose appropriate "
                     "data visualizations."
-                )
+                ),
             },
             {
                 "role": "user",
-                "content": prompt
-            }
+                "content": prompt,
+            },
         ],
-        temperature=0
+
+        temperature=0,
     )
 
     chart_type = (
@@ -521,7 +594,7 @@ Reply with ONLY one word.
         "bar",
         "line",
         "pie",
-        "scatter"
+        "scatter",
     ]:
 
         chart_type = "bar"
