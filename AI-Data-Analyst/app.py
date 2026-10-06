@@ -302,9 +302,15 @@ with metric4:
 
 with st.expander("📋 View Dataset Preview"):
 
+    st.caption(
+        f"Showing all {len(df):,} rows and {len(df.columns)} columns."
+    )
+
     st.dataframe(
-        df.head(100),
+        df,
+        height=500,
         width="stretch",
+        hide_index=False,
     )
 
 
