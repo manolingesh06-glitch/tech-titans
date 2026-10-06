@@ -497,3 +497,18 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     border-color: #7895c5 !important;
     box-shadow: 0 0 0 2px rgba(49, 95, 197, 0.08) !important;
 }
+/* ============================================================
+   DATASET PREVIEW BORDER
+   ============================================================ */
+
+[data-testid="stDataFrame"] {
+    border: 1px solid #c7ced8 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+}
+
+/* Keep the dataframe header clearly visible */
+[data-testid="stDataFrame"] iframe {
+    border: none !important;
+}
